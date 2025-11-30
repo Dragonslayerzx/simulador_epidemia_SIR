@@ -1,5 +1,6 @@
 import streamlit as st
 from modelo_sir import simulate_sir
+from modelo_agentes import ModeloAgentes
 import matplotlib.pyplot as plt
 import numpy as np
 import time
@@ -31,8 +32,78 @@ st.markdown("""
         padding-left: 3rem !important;
         padding-right: 3rem !important;
     }
+    
+    /* KPI CARDS - MEJORADO: gap mínimo solo para métricas */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
+        gap: 0.75rem !important;
+    }
+    
+    /* Tarjetas KPI estilo dashboard - OPTIMIZADO */
+    div[data-testid="stMetric"] {
+        background-color: #0f172a;
+        padding: 1.2rem 1rem !important;
+        border-radius: 0.75rem;
+        border: 1px solid #1e293b;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        height: 120px !important;        /* altura fija uniforme */
+        width: 100% !important;          /* ocupa todo su contenedor */
+        max-width: none !important;      /* elimina restricción anterior */
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        margin: 0 !important;
+    }
+    
+    div[data-testid="stMetric"] > label {
+        color: #e5e7eb !important;
+        font-weight: 600;
+        font-size: 0.9rem !important;
+        margin-bottom: 0.25rem;
+        text-align: center;
+    }
+    
+    div[data-testid="stMetric"] span[data-testid="stMetricValue"] {
+        color: #f9fafb !important;
+        font-weight: 700;
+        font-size: 1.5rem !important;
+        margin-top: 0.25rem;
+        text-align: center;
+    }
+    
+    /* Elimina regla conflictiva anterior */
+    div[data-testid="column"] > div:has(div[data-testid="stMetric"]) {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    
+    /* Responsive: en pantallas pequeñas, stack vertical */
+    @media (max-width: 1200px) {
+        div[data-testid="column"] {
+            width: 100% !important;
+            flex-basis: 100% !important;
+        }
+        div[data-testid="stMetric"] {
+            height: 100px !important;  /* más compacto en móvil */
+        }
+    }
+    
+    /* Colores específicos para cada métrica - CORREGIDO con nth-of-type */
+    div[data-testid="stMetric"]:nth-of-type(1) span[data-testid="stMetricValue"] {
+        color: #f97316 !important; /* Naranja para día pico */
+    }
+    div[data-testid="stMetric"]:nth-of-type(2) span[data-testid="stMetricValue"] {
+        color: #f59e0b !important; /* Amarillo para máximo infectados */
+    }
+    div[data-testid="stMetric"]:nth-of-type(3) span[data-testid="stMetricValue"] {
+        color: #22c55e !important; /* Verde para % recuperados */
+    }
+    div[data-testid="stMetric"]:nth-of-type(4) span[data-testid="stMetricValue"] {
+        color: #38bdf8 !important; /* Azul para % susceptibles */
+    }
     </style>
 """, unsafe_allow_html=True)
+
 
 # Estado de sesión
 if "page" not in st.session_state:
@@ -49,6 +120,8 @@ with col_sidebar:
         st.session_state.page = "Simulador"
     if st.button("Información del Modelo", use_container_width=True):
         st.session_state.page = "Información"
+    if st.button("Modelo de agentes", use_container_width=True):
+        st.session_state.page = "Modelo de agentes"
 
 with col_main:
     st.title("Simulador Epidemiológico SIR")
@@ -130,9 +203,6 @@ with col_main:
         
         st.write("")
         st.info("Usa el menú lateral para comenzar a explorar el simulador o conocer más sobre el modelo SIR.")
-
-
-
 
     elif st.session_state.page == "Simulador":
         st.header("Simulador SIR - Modelo Determinista")
@@ -278,50 +348,160 @@ with col_main:
             
             if modo_visualizacion == "Resultado instantáneo":
                 st.subheader("Resultados de la simulación")
-                st.write(f"Día del pico de infección: {peak_day:.1f}")
-                st.write(f"Máximo infectados: {int(max_infectados)}")
-                st.write(f"% Recuperados: {porc_recuperados:.2f}%")
-                st.write(f"% Susceptibles: {porc_susceptibles:.2f}%")
-                
-                fig, ax = plt.subplots(figsize=(10, 5))    # ancho, alto en pulgadas
-                ax.plot(t, S, label="Susceptibles")
-                ax.plot(t, I, label="Infectados")
-                ax.plot(t, R, label="Recuperados")
-                ax.set_xlabel("Días")
-                ax.set_ylabel("Número de personas")
-                ax.legend()
-                st.pyplot(fig)
+
+                # Fila de KPIs tipo dashboard
+                kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
+
+                with kpi_col1:
+                    st.metric(
+                        label="Día pico de infección",
+                        value=f"{peak_day:.1f}",
+                        help="Momento en el que se alcanza el número máximo de infectados simultáneos."
+                    )
+
+                with kpi_col2:
+                    st.metric(
+                        label="Máximo infectados",
+                        value=f"{int(max_infectados):,}".replace(",", " "),
+                        help="Cantidad máxima de personas infectadas al mismo tiempo."
+                    )
+
+                with kpi_col3:
+                    st.metric(
+                        label="% Recuperados al final",
+                        value=f"{porc_recuperados:.2f} %",
+                        help="Porcentaje de la población que acaba en el compartimento Recuperados."
+                    )
+
+                with kpi_col4:
+                    st.metric(
+                        label="% Susceptibles al final",
+                        value=f"{porc_susceptibles:.2f} %",
+                        help="Porcentaje de la población que nunca se infectó."
+                    )
+
+                # Card para la gráfica
+                with st.container(border=True):
+                    st.markdown("**Evolución temporal S, I, R**")
+                    fig, ax = plt.subplots(figsize=(12, 6))
+                    ax.plot(t, S, label="Susceptibles", color="#38bdf8", linewidth=3)
+                    ax.plot(t, I, label="Infectados", color="#f97316", linewidth=3)
+                    ax.plot(t, R, label="Recuperados", color="#22c55e", linewidth=3)
+                    ax.set_facecolor("#020617")
+                    fig.patch.set_facecolor("#020617")
+                    ax.tick_params(colors="#e5e7eb")
+                    ax.spines["bottom"].set_color("#475569")
+                    ax.spines["left"].set_color("#475569")
+                    ax.spines["top"].set_visible(False)
+                    ax.spines["right"].set_visible(False)
+                    ax.set_xlabel("Días", color="#e5e7eb", fontsize=12)
+                    ax.set_ylabel("Número de personas", color="#e5e7eb", fontsize=12)
+                    ax.grid(alpha=0.2, color="#64748b")
+                    legend = ax.legend(frameon=True, fancybox=True, shadow=True)
+                    legend.get_frame().set_facecolor("#1e293b")
+                    for text in legend.get_texts():
+                        text.set_color("#e5e7eb")
+                    plt.tight_layout()
+                    st.pyplot(fig)
+
                 
             else:  # Tiempo real
                 st.subheader("Simulación en tiempo real")
+                
+                # Placeholder para KPIs arriba de la gráfica
+                kpis_placeholder = st.empty()
+                
+                # Animación
                 chart_placeholder = st.empty()
-                indicators_placeholder = st.empty()
+                
+                # Placeholder para información visual debajo de la gráfica
+                info_placeholder = st.empty()
                 
                 for i in range(len(t)):
-                    fig, ax = plt.subplots(figsize=(10, 5))
-                    ax.plot(t[:i+1], S[:i+1], label="Susceptibles")
-                    ax.plot(t[:i+1], I[:i+1], label="Infectados")
-                    ax.plot(t[:i+1], R[:i+1], label="Recuperados")
+                    fig, ax = plt.subplots(figsize=(10, 4))
+
+                    # Estilo de la gráfica (colores y diseño idéntico)
+                    ax.plot(t[:i+1], S[:i+1], label="Susceptibles", color="#38bdf8", linewidth=3)
+                    ax.plot(t[:i+1], I[:i+1], label="Infectados", color="#f97316", linewidth=3)
+                    ax.plot(t[:i+1], R[:i+1], label="Recuperados", color="#22c55e", linewidth=3)
+
+                    # Fondo oscuro
+                    ax.set_facecolor("#020617")
+                    fig.patch.set_facecolor("#020617")
+
+                    # Color de los ejes, ticks y texto
+                    ax.tick_params(colors="#e5e7eb")
+                    ax.spines["bottom"].set_color("#475569")
+                    ax.spines["left"].set_color("#475569")
+                    ax.spines["top"].set_visible(False)
+                    ax.spines["right"].set_visible(False)
+                    ax.set_xlabel("Días", color="#e5e7eb")
+                    ax.set_ylabel("Número de personas", color="#e5e7eb")
+
+                    # Grid suave
+                    ax.grid(alpha=0.2, color="#64748b")
+
+                    # Leyenda estilizada
+                    legend = ax.legend(frameon=True, fancybox=True, shadow=True)
+                    legend.get_frame().set_facecolor("#1e293b")
+                    for text in legend.get_texts():
+                        text.set_color("#e5e7eb")
+
+                    # Rango de ejes
                     ax.set_xlim(0, days)
                     ax.set_ylim(0, N)
-                    ax.legend()
-                    ax.set_xlabel("Días")
-                    ax.set_ylabel("Número de personas")
+
                     chart_placeholder.pyplot(fig)
                     plt.close(fig)
+
                     
-                    indicators_placeholder.write(f"Día actual: {t[i]:.0f} | Infectados: {int(I[i])}")
+                    # Tarjeta visual debajo de la gráfica, más compacta
+                    with info_placeholder.container():
+                        st.markdown(
+                            f"""
+                            <div style="background-color:#0f172a; border-radius:0.75rem; border:1px solid #1e293b; padding:1rem; margin-top:0.5rem; display:flex; justify-content:center; align-items:center; gap:1rem; font-size:1.1rem;">
+                                <span style="color:#e5e7eb;">Día actual: <span style="color:#22c55e; font-weight:700;">{int(t[i])}</span></span>
+                                <span style="color:#e5e7eb;">| Infectados: <span style="color:#f59e0b; font-weight:700;">{int(I[i])}</span></span>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
                     
                     time.sleep(0.05)
-                
-                st.subheader("Resultados finales")
-                st.write(f"Día del pico de infección: {peak_day:.1f}")
-                st.write(f"Máximo infectados: {int(max_infectados)}")
-                st.write(f"% Recuperados: {porc_recuperados:.2f}%")
-                st.write(f"% Susceptibles: {porc_susceptibles:.2f}%")
-
-
-
+                    
+                    if i == len(t) - 1:
+                        with kpis_placeholder.container():
+                            st.subheader("Resultados finales")
+                            
+                            kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
+                            
+                            with kpi_col1:
+                                st.metric(
+                                    label="Día pico de infección",
+                                    value=f"{peak_day:.1f}",
+                                    help="Momento en el que se alcanza el número máximo de infectados simultáneos."
+                                )
+                            
+                            with kpi_col2:
+                                st.metric(
+                                    label="Máximo infectados",
+                                    value=f"{int(max_infectados):,}".replace(",", "."),
+                                    help="Cantidad máxima de personas infectadas al mismo tiempo."
+                                )
+                            
+                            with kpi_col3:
+                                st.metric(
+                                    label="% Recuperados al final",
+                                    value=f"{porc_recuperados:.1f}%",
+                                    help="Porcentaje de la población que acaba en el compartimento Recuperados."
+                                )
+                            
+                            with kpi_col4:
+                                st.metric(
+                                    label="% Susceptibles al final",
+                                    value=f"{porc_susceptibles:.1f}%",
+                                    help="Porcentaje de la población que nunca se infectó."
+                                )
 
     elif st.session_state.page == "Información":
         st.header("Información del modelo SIR")
@@ -385,3 +565,125 @@ with col_main:
         - No incluye medidas de intervención como vacunación o cuarentenas.
         - Parámetros constantes en el tiempo.
         """)
+
+    elif st.session_state.page == "Modelo de agentes":
+        st.header("Simulador de Agentes - Modelo Individualizado")
+
+        # Parámetros (comparables con SIR y específicos de agentes)
+        num_agentes = st.slider("Número de agentes", 10, 1000, 100)
+        tamaño = st.slider("Tamaño del área", 10, 100, 50)
+        radio_contagio = st.slider("Radio de contagio", 0.1, 5.0, 1.0)
+        beta = st.slider("Probabilidad de contagio (β)", 0.0, 1.0, 0.3)
+        gamma = st.slider("Probabilidad de recuperación (γ)", 0.0, 1.0, 0.1)
+        dias = st.number_input("Días de simulación", min_value=1, value=100, step=1, help="Número de pasos (días) para la simulación")
+
+        if st.button("Iniciar simulación"):
+            # Inicializar modelo de agentes
+            modelo_agentes = ModeloAgentes(num_agentes, tamaño, radio_contagio, beta, gamma)
+
+            # Placeholder para gráfica y métricas
+            chart_placeholder = st.empty()
+
+            # Listas para registrar métricas por día
+            infectados_por_dia = []
+
+            # Simulación iterativa
+            for paso in range(dias):
+                modelo_agentes.mover_agentes()
+                modelo_agentes.contagiar()
+                modelo_agentes.recuperar()
+
+                # Registrar número de infectados en el paso actual
+                estados = modelo_agentes.obtener_estado()
+                infecc = sum(1 for s in estados if s[2] == 'I')
+                infectados_por_dia.append(infecc)
+
+                # Mostrar gráfica con estilo oscuro
+                x = [e[0] for e in estados]
+                y = [e[1] for e in estados]
+                c = [e[2] for e in estados]
+
+                # Colores alineados con SIR puro
+                colores = []
+                for estado in c:
+                    if estado == 'S':
+                        colores.append('#38bdf8')  # Azul claro
+                    elif estado == 'I':
+                        colores.append('#f97316')  # Naranja
+                    else:
+                        colores.append('#22c55e')  # Verde
+
+                fig, ax = plt.subplots(figsize=(10, 4))
+                ax.set_facecolor("#020617")
+                fig.patch.set_facecolor("#020617")
+                ax.scatter(x, y, c=colores, s=100)
+                ax.tick_params(colors="#e5e7eb")
+                ax.spines["bottom"].set_color("#475569")
+                ax.spines["left"].set_color("#475569")
+                ax.spines["top"].set_visible(False)
+                ax.spines["right"].set_visible(False)
+                ax.set_xlabel("X", color="#e5e7eb")
+                ax.set_ylabel("Y", color="#e5e7eb")
+                ax.set_xlim(0, tamaño)
+                ax.set_ylim(0, tamaño)
+                ax.set_title(f"Paso de simulación: {paso + 1}", color="#e5e7eb")
+                ax.grid(alpha=0.2, color="#64748b")
+                chart_placeholder.pyplot(fig)
+                plt.close(fig)
+
+                time.sleep(0.1)
+
+            # Calcular métricas finales y avanzadas
+            states_final = modelo_agentes.obtener_estado()
+            num_s = sum(1 for s in states_final if s[2] == 'S')
+            num_i = sum(1 for s in states_final if s[2] == 'I')
+            num_r = sum(1 for s in states_final if s[2] == 'R')
+            total = len(states_final)
+            max_infectados = max(infectados_por_dia)
+            dia_pico = infectados_por_dia.index(max_infectados) + 1
+            porcentaje_max_infectados = 100 * max_infectados / total
+            porcentaje_final_s = 100 * num_s / total
+            porcentaje_final_i = 100 * num_i / total
+            porcentaje_final_r = 100 * num_r / total
+
+            # Mostrar resultados finales y avanzados
+            st.markdown("---")
+            st.markdown("<h3 style='color:#f9fafb; text-align:center;'>Resultados finales</h3>", unsafe_allow_html=True)
+
+            kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
+            with kpi_col1:
+                st.markdown(f"""
+                    <div style="background-color:#0f172a; border-radius:0.75rem; border:1px solid #1e293b; padding:1rem; margin:0.5rem; text-align:center; box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                        <p style="margin:0; font-size:1rem; font-weight:600; color:#e5e7eb;">Susceptibles</p>
+                        <p style="margin:0; font-size:1.8rem; font-weight:700; color:#38bdf8;">{num_s}<br><span style="font-size:1rem;">({porcentaje_final_s:.1f}%)</span></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            with kpi_col2:
+                st.markdown(f"""
+                    <div style="background-color:#0f172a; border-radius:0.75rem; border:1px solid #1e293b; padding:1rem; margin:0.5rem; text-align:center; box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                        <p style="margin:0; font-size:1rem; font-weight:600; color:#e5e7eb;">Infectados</p>
+                        <p style="margin:0; font-size:1.8rem; font-weight:700; color:#f97316;">{num_i}<br><span style="font-size:1rem;">({porcentaje_final_i:.1f}%)</span></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            with kpi_col3:
+                st.markdown(f"""
+                    <div style="background-color:#0f172a; border-radius:0.75rem; border:1px solid #1e293b; padding:1rem; margin:0.5rem; text-align:center; box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                        <p style="margin:0; font-size:1rem; font-weight:600; color:#e5e7eb;">Recuperados</p>
+                        <p style="margin:0; font-size:1.8rem; font-weight:700; color:#22c55e;">{num_r}<br><span style="font-size:1rem;">({porcentaje_final_r:.1f}%)</span></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            # Métricas avanzadas
+            st.markdown("### Métricas avanzadas")
+            st.metric("Número máximo de infectados", max_infectados, f"{porcentaje_max_infectados:.1f}%")
+            st.metric("Día del pico de infección", dia_pico)
+            st.markdown("---")
+            kpi_col4, kpi_col5 = st.columns(2)
+            with kpi_col4:
+                st.metric("Días simulados", dias)
+            with kpi_col5:
+                st.metric("Agentes totales", total)
+
+
+
+
